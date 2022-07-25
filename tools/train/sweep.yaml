@@ -7,11 +7,11 @@ metric:
 parameters:
   optim:
     value: distributed_shampoo
-  learning_rate:
-    distribution: log_uniform_values
-    # from exp(min) to exp(max)
-    min: -9.2
-    max: -6.9
+  # learning_rate:
+  #   distribution: log_uniform
+  #   # from exp(min) to exp(max)
+  #   min: -9.2
+  #   max: -6.9
   tokenizer_name:
     value: boris/dalle-mini-tokenizer
   config_name:
