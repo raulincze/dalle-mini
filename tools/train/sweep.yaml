@@ -47,5 +47,4 @@ command:
   - "/content/drive/My Drive/Colab Notebooks/dalle"
   - "--overwrite_output_dir"
   - "--do_train"
-  - "--do_eval"
   - ${args}
