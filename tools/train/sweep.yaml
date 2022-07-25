@@ -21,7 +21,7 @@ parameters:
   dtype:
     value: bfloat16
   dataset_repo_or_path:
-    value: /content/drive/My Drive/Colab Notebooks/my_images/
+    value: /content/drive/My Drive/Colab Notebooks/my_images
   per_device_train_batch_size:
     value: 64
   per_device_eval_batch_size:
@@ -44,7 +44,8 @@ command:
   - ${program}
   - "--streaming"
   - "--output_dir"
-  - "/content/drive/My Drive/Colab Notebooks/dalle/"
+  - "/content/drive/My Drive/Colab Notebooks/dalle"
   - "--overwrite_output_dir"
   - "--do_train"
+  - "--do_eval"
   - ${args}
