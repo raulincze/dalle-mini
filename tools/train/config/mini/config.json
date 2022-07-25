@@ -30,7 +30,7 @@
     "max_text_length": 64,
     "min_length": 257,
     "model_type": "dallebart",
-    "normalize_text": true,
+    "normalize_text": false,
     "pad_token_id": 16385,
     "scale_embedding": false,
     "sinkhorn_iters": 1,
