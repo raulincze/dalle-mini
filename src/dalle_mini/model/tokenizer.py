@@ -24,7 +24,10 @@ class GameCoordinateTokenizer():
         max_coords = 7 if truncation else max_length
         np_coords = np.zeros((len(inputs), max_coords))
         for i, input in enumerate(inputs):
-            coordinates = json.loads(input)
+            try:
+                coordinates = json.loads(input)
+            except:
+                print(input)
             np_coords[i, 0] = coordinates["position"]["x"]
             np_coords[i, 1] = coordinates["position"]["y"]
             np_coords[i, 2] = coordinates["position"]["z"]
