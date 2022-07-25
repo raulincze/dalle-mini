@@ -8,7 +8,7 @@ parameters:
   optim:
     value: distributed_shampoo
   learning_rate:
-    distribution: log_uniform
+    distribution: log_uniform_values
     # from exp(min) to exp(max)
     min: -9.2
     max: -6.9
