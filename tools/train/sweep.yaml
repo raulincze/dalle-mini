@@ -40,7 +40,7 @@ parameters:
     value: 200
 
 command:
-  - python3
+  - python
   - ${program}
   - "--streaming"
   - "--output_dir"
