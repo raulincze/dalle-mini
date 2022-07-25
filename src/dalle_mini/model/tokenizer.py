@@ -22,7 +22,7 @@ class GameCoordinateTokenizer():
     ):
         assert return_tensors == "np"
         max_coords = 7 if truncation else max_length
-        np_coords = np.zeros(len(inputs), max_coords)
+        np_coords = np.zeros((len(inputs), max_coords))
         for i, input in enumerate(inputs):
             coordinates = json.loads(input)
             np_coords[i, 0] = coordinates["position"]["x"]
