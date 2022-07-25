@@ -68,6 +68,12 @@ logger = logging.getLogger(__name__)
 
 cc.initialize_cache("jax_cache")
 
+try:
+    import jax.tools.colab_tpu
+    jax.tools.colab_tpu.setup_tpu()
+except:
+    pass
+
 
 @dataclass
 class ModelArguments:
