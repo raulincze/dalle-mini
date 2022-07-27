@@ -391,6 +391,7 @@ class FlaxBartAttention(FlaxBartAttention):
         # combine masks if needed
         if attention_mask is not None and self.causal:
             print("!!!! CAUSAL MASK SHAPE before", causal_mask.shape)
+            print("!!!! ATTENTION MASK SHAPE", attention_mask.shape)
             attention_mask = jnp.broadcast_to(
                 jnp.expand_dims(attention_mask, axis=(-3, -2)),
                 causal_mask.shape)
