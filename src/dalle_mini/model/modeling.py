@@ -59,24 +59,22 @@ def smelu(beta: Any = 1.0):
     Implementation of "Real World Large Scale Recommendation Systems Reproducibility and Smooth Activations"
     https://arxiv.org/abs/2202.06499
     """
-
     @custom_jvp
     @jax.jit
     def _smelu(x: Any) -> Any:
         x = jnp.where(x <= -beta, 0.0, x)
         return jnp.where(x >= beta, x, jnp.square(x + beta) / (4 * beta))
 
-    _smelu.defjvps(
-        lambda g, ans, x: lax.select(
-            x == -beta,
-            lax.full_like(g, 0),
-            lax.select(x == beta, lax.full_like(g, 1), g),
-        )
-    )
+    _smelu.defjvps(lambda g, ans, x: lax.select(
+        x == -beta,
+        lax.full_like(g, 0),
+        lax.select(x == beta, lax.full_like(g, 1), g),
+    ))
     return _smelu
 
 
 ACT2FN.update({"smelu": smelu()})
+
 
 # deepnet initialization
 def deepnet_init(gain=1):
@@ -91,14 +89,16 @@ def deepnet_init(gain=1):
 # deepnet gain
 deepnet_gain = {
     "encoder": {
-        "alpha": lambda config: 0.81
-        * (config.encoder_layers**4 * config.decoder_layers) ** 0.0625,
-        "beta": lambda config: 0.87
-        * (config.encoder_layers**4 * config.decoder_layers) ** -0.0625,
+        "alpha":
+        lambda config: 0.81 *
+        (config.encoder_layers**4 * config.decoder_layers)**0.0625,
+        "beta":
+        lambda config: 0.87 *
+        (config.encoder_layers**4 * config.decoder_layers)**-0.0625,
     },
     "decoder": {
-        "alpha": lambda config: (3 * config.decoder_layers) ** 0.25,
-        "beta": lambda config: (12 * config.decoder_layers) ** -0.25,
+        "alpha": lambda config: (3 * config.decoder_layers)**0.25,
+        "beta": lambda config: (12 * config.decoder_layers)**-0.25,
     },
 }
 
@@ -118,8 +118,8 @@ class RMSNorm(nn.Module):
 
     @nn.compact
     def __call__(self, x):
-        reduction_axes = (-1,)
-        feature_axes = (-1,)
+        reduction_axes = (-1, )
+        feature_axes = (-1, )
 
         rms_sq = self._compute_rms_sq(x, reduction_axes)
 
@@ -154,8 +154,10 @@ class RMSNorm(nn.Module):
         use_scale,
         scale_init,
     ):
-        reduction_axes = nn.normalization._canonicalize_axes(x.ndim, reduction_axes)
-        feature_axes = nn.normalization._canonicalize_axes(x.ndim, feature_axes)
+        reduction_axes = nn.normalization._canonicalize_axes(
+            x.ndim, reduction_axes)
+        feature_axes = nn.normalization._canonicalize_axes(
+            x.ndim, feature_axes)
         stats_shape = list(x.shape)
         for axis in reduction_axes:
             stats_shape[axis] = 1
@@ -167,9 +169,8 @@ class RMSNorm(nn.Module):
             reduced_feature_shape.append(x.shape[ax])
         mul = lax.rsqrt(rms_sq + epsilon)
         if use_scale:
-            scale = mdl.param(
-                "scale", scale_init, reduced_feature_shape, param_dtype
-            ).reshape(feature_shape)
+            scale = mdl.param("scale", scale_init, reduced_feature_shape,
+                              param_dtype).reshape(feature_shape)
             mul *= scale
         y = mul * x
         return jnp.asarray(y, dtype)
@@ -214,7 +215,10 @@ def dot_product_attention_weights(
     depth = query.shape[-1]
     query = query / jnp.sqrt(depth).astype(dtype)
     # attn weight shape is (batch..., num_heads, q_length, kv_length)
-    attn_weights = jnp.einsum("...qhd,...khd->...hqk", query, key, precision=precision)
+    attn_weights = jnp.einsum("...qhd,...khd->...hqk",
+                              query,
+                              key,
+                              precision=precision)
 
     # apply attention bias: masking, dropout, proximity bias, etc.
     if bias is not None:
@@ -233,9 +237,13 @@ def dot_product_attention_weights(
         for i in range(sinkhorn_iters):
             # when causal, some attn_weights have been set to -inf through bias
             if i % 2 == 0:
-                attn_weights -= jax.nn.logsumexp(attn_weights, axis=-1, keepdims=True)
+                attn_weights -= jax.nn.logsumexp(attn_weights,
+                                                 axis=-1,
+                                                 keepdims=True)
             else:
-                attn_weights -= jax.nn.logsumexp(attn_weights, axis=-2, keepdims=True)
+                attn_weights -= jax.nn.logsumexp(attn_weights,
+                                                 axis=-2,
+                                                 keepdims=True)
             if mask is not None:
                 attn_weights = jnp.where(mask, attn_weights, -jnp.inf)
         attn_weights = jnp.exp(attn_weights).astype(dtype)
@@ -245,13 +253,14 @@ def dot_product_attention_weights(
         keep_prob = 1.0 - dropout_rate
         if broadcast_dropout:
             # dropout is broadcast across the batch + head dimensions
-            dropout_shape = tuple([1] * (key.ndim - 2)) + attn_weights.shape[-2:]
+            dropout_shape = tuple([1] *
+                                  (key.ndim - 2)) + attn_weights.shape[-2:]
             keep = jax.random.bernoulli(dropout_rng, keep_prob, dropout_shape)
         else:
-            keep = jax.random.bernoulli(dropout_rng, keep_prob, attn_weights.shape)
-        multiplier = keep.astype(attn_weights.dtype) / jnp.asarray(
-            keep_prob, dtype=dtype
-        )
+            keep = jax.random.bernoulli(dropout_rng, keep_prob,
+                                        attn_weights.shape)
+        multiplier = keep.astype(attn_weights.dtype) / jnp.asarray(keep_prob,
+                                                                   dtype=dtype)
         attn_weights = attn_weights * multiplier
 
     return attn_weights
@@ -273,8 +282,7 @@ class FlaxBartAttention(FlaxBartAttention):
         if self.head_dim * self.num_heads != self.embed_dim:
             raise ValueError(
                 f"embed_dim must be divisible by num_heads (got `embed_dim`: {self.embed_dim}"
-                f" and `num_heads`: {self.num_heads})."
-            )
+                f" and `num_heads`: {self.num_heads}).")
 
         dense = partial(
             nn.Dense,
@@ -283,36 +291,27 @@ class FlaxBartAttention(FlaxBartAttention):
             dtype=self.dtype,
         )
 
-        gain = deepnet_gain["encoder" if self.is_encoder else "decoder"]["beta"](
-            self.config
-        )
+        gain = deepnet_gain["encoder" if self.
+                            is_encoder else "decoder"]["beta"](self.config)
 
         self.q_proj = dense(
-            kernel_init=deepnet_init()
-            if self.config.use_deepnet_scaling
-            else jax.nn.initializers.normal(self.config.init_std)
-        )
+            kernel_init=deepnet_init() if self.config.use_deepnet_scaling else
+            jax.nn.initializers.normal(self.config.init_std))
         self.k_proj = dense(
-            kernel_init=deepnet_init()
-            if self.config.use_deepnet_scaling
-            else jax.nn.initializers.normal(self.config.init_std)
-        )
+            kernel_init=deepnet_init() if self.config.use_deepnet_scaling else
+            jax.nn.initializers.normal(self.config.init_std))
         self.v_proj = dense(
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
-            else jax.nn.initializers.normal(self.config.init_std)
-        )
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
+            else jax.nn.initializers.normal(self.config.init_std))
         self.out_proj = dense(
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
-            else jax.nn.initializers.normal(self.config.init_std)
-        )
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
+            else jax.nn.initializers.normal(self.config.init_std))
         self.dropout_layer = nn.Dropout(rate=self.dropout)
 
         if self.config.use_head_scale:
-            self.head_scale = self.param(
-                "head_scale", jax.nn.initializers.ones, (1, 1, self.num_heads, 1)
-            )
+            self.head_scale = self.param("head_scale",
+                                         jax.nn.initializers.ones,
+                                         (1, 1, self.num_heads, 1))
 
         if self.config.use_cosine_attention:
             self.tau = self.param(
@@ -326,15 +325,15 @@ class FlaxBartAttention(FlaxBartAttention):
                 self.q_length,
                 self.k_length * self.num_heads,
                 embedding_init=deepnet_init()
-                if self.config.use_deepnet_scaling
-                else jax.nn.initializers.normal(self.config.init_std),
+                if self.config.use_deepnet_scaling else
+                jax.nn.initializers.normal(self.config.init_std),
             )
 
         if self.causal:
             # used only in decoder
-            self.causal_mask = make_causal_mask(
-                jnp.ones((1, self.config.image_length), dtype="bool"), dtype="bool"
-            )
+            self.causal_mask = make_causal_mask(jnp.ones(
+                (1, self.config.image_length), dtype="bool"),
+                                                dtype="bool")
 
     def __call__(
         self,
@@ -369,26 +368,31 @@ class FlaxBartAttention(FlaxBartAttention):
 
         # handle cache prepare causal attention mask
         if self.causal:
-            query_length, key_length = query_states.shape[1], key_states.shape[1]
+            query_length, key_length = query_states.shape[1], key_states.shape[
+                1]
             if self.has_variable("cache", "cached_key"):
                 mask_shift = self.variables["cache"]["cache_index"]
-                max_decoder_length = self.variables["cache"]["cached_key"].shape[1]
+                max_decoder_length = self.variables["cache"][
+                    "cached_key"].shape[1]
                 causal_mask = lax.dynamic_slice(
                     self.causal_mask,
                     (0, 0, mask_shift, 0),
                     (1, 1, query_length, max_decoder_length),
                 )
             else:
-                causal_mask = self.causal_mask[:, :, :query_length, :key_length]
-            causal_mask = jnp.broadcast_to(
-                causal_mask, (batch_size,) + causal_mask.shape[1:]
-            )
+                causal_mask = self.causal_mask[:, :, :query_length, :
+                                               key_length]
+            causal_mask = jnp.broadcast_to(causal_mask, (batch_size, ) +
+                                           causal_mask.shape[1:])
+            print("!!!! CAUSAL MASK SHAPE", causal_mask.shape)
+            print("!!!! QUERY LENGTH", len(query_length))
+            print("!!!! KEY LENGTH", len(key_length))
 
         # combine masks if needed
         if attention_mask is not None and self.causal:
             attention_mask = jnp.broadcast_to(
-                jnp.expand_dims(attention_mask, axis=(-3, -2)), causal_mask.shape
-            )
+                jnp.expand_dims(attention_mask, axis=(-3, -2)),
+                causal_mask.shape)
             attention_mask = combine_masks(attention_mask, causal_mask)
         elif self.causal:
             attention_mask = causal_mask
@@ -397,10 +401,10 @@ class FlaxBartAttention(FlaxBartAttention):
 
         # During fast autoregressive decoding, we feed one position at a time,
         # and cache the keys and values step by step.
-        if self.causal and (self.has_variable("cache", "cached_key") or init_cache):
+        if self.causal and (self.has_variable("cache", "cached_key")
+                            or init_cache):
             key_states, value_states, attention_mask = self._concatenate_to_cache(
-                key_states, value_states, query_states, attention_mask
-            )
+                key_states, value_states, query_states, attention_mask)
 
         # Convert the boolean attention mask to an attention bias.
         if attention_mask is not None:
@@ -420,17 +424,17 @@ class FlaxBartAttention(FlaxBartAttention):
         if self.config.use_cosine_attention:
             # normalize q and k
             query_states = query_states / (
-                jnp.linalg.norm(query_states, axis=-1, keepdims=True) + 1e-8
-            )
+                jnp.linalg.norm(query_states, axis=-1, keepdims=True) + 1e-8)
             key_states = key_states / (
-                jnp.linalg.norm(key_states, axis=-1, keepdims=True) + 1e-8
-            )
+                jnp.linalg.norm(key_states, axis=-1, keepdims=True) + 1e-8)
 
         # relative position embeddings
         if self.config.use_swin_position_embeddings:
             position_ids = jnp.arange(self.q_length)
             embed_pos = self.rel_bias(position_ids)
-            embed_pos = rearrange(embed_pos, "q (k h) -> 1 h q k", h=self.num_heads)
+            embed_pos = rearrange(embed_pos,
+                                  "q (k h) -> 1 h q k",
+                                  h=self.num_heads)
         else:
             embed_pos = None
 
@@ -453,7 +457,8 @@ class FlaxBartAttention(FlaxBartAttention):
             # divide by tau
             attn_weights = attn_weights / jnp.maximum(self.tau, 0.01)
 
-        attn_output = jnp.einsum("...hqk,...khd->...qhd", attn_weights, value_states)
+        attn_output = jnp.einsum("...hqk,...khd->...qhd", attn_weights,
+                                 value_states)
         if self.config.use_head_scale:
             # per Normformer
             attn_output = attn_output * self.head_scale
@@ -473,11 +478,12 @@ class GLU(nn.Module):
     is_encoder: bool = False
 
     @nn.compact
-    def __call__(self, x: jnp.ndarray, deterministic: bool = True) -> jnp.ndarray:
+    def __call__(self,
+                 x: jnp.ndarray,
+                 deterministic: bool = True) -> jnp.ndarray:
 
-        gain = deepnet_gain["encoder" if self.is_encoder else "decoder"]["beta"](
-            self.config
-        )
+        gain = deepnet_gain["encoder" if self.
+                            is_encoder else "decoder"]["beta"](self.config)
 
         if self.config.ln_positions in ["normformer", "cogview", "preln"]:
             x = norm(
@@ -490,8 +496,7 @@ class GLU(nn.Module):
             self.ffn_dim,
             dtype=self.dtype,
             use_bias=self.config.use_bias,
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
             else jax.nn.initializers.normal(self.config.init_std),
         )(x)
         w = ACT2FN[self.config.activation_function](w)
@@ -499,8 +504,7 @@ class GLU(nn.Module):
             self.ffn_dim,
             dtype=self.dtype,
             use_bias=self.config.use_bias,
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
             else jax.nn.initializers.normal(self.config.init_std),
         )(x)
         x = w * v
@@ -512,20 +516,19 @@ class GLU(nn.Module):
                 use_scale=self.config.force_ln_scale,
             )(x)
         x = nn.Dropout(rate=self.config.activation_dropout)(
-            x, deterministic=deterministic
-        )
+            x, deterministic=deterministic)
 
         x = nn.Dense(
             self.embed_dim,
             dtype=self.dtype,
             use_bias=self.config.use_bias,
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
             else jax.nn.initializers.normal(self.config.init_std),
         )(x)
         if self.config.ln_positions in ["swinv2", "cogview"]:
             x = norm(self.config.ln_type, dtype=self.dtype, epsilon=1e-05)(x)
-        x = nn.Dropout(rate=self.config.dropout)(x, deterministic=deterministic)
+        x = nn.Dropout(rate=self.config.dropout)(x,
+                                                 deterministic=deterministic)
         return x
 
 
@@ -539,11 +542,12 @@ class FFN(nn.Module):
     is_encoder: bool = False
 
     @nn.compact
-    def __call__(self, x: jnp.ndarray, deterministic: bool = True) -> jnp.ndarray:
+    def __call__(self,
+                 x: jnp.ndarray,
+                 deterministic: bool = True) -> jnp.ndarray:
 
-        gain = deepnet_gain["encoder" if self.is_encoder else "decoder"]["beta"](
-            self.config
-        )
+        gain = deepnet_gain["encoder" if self.
+                            is_encoder else "decoder"]["beta"](self.config)
         if self.config.ln_positions in ["normformer", "cogview", "preln"]:
             x = norm(
                 self.config.ln_type,
@@ -555,8 +559,7 @@ class FFN(nn.Module):
             self.ffn_dim,
             dtype=self.dtype,
             use_bias=self.config.use_bias,
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
             else jax.nn.initializers.normal(self.config.init_std),
         )(x)
         x = ACT2FN[self.config.activation_function](x)
@@ -568,19 +571,18 @@ class FFN(nn.Module):
                 use_scale=self.config.force_ln_scale,
             )(x)
         x = nn.Dropout(rate=self.config.activation_dropout)(
-            x, deterministic=deterministic
-        )
+            x, deterministic=deterministic)
         x = nn.Dense(
             self.embed_dim,
             dtype=self.dtype,
             use_bias=self.config.use_bias,
-            kernel_init=deepnet_init(gain)
-            if self.config.use_deepnet_scaling
+            kernel_init=deepnet_init(gain) if self.config.use_deepnet_scaling
             else jax.nn.initializers.normal(self.config.init_std),
         )(x)
         if self.config.ln_positions in ["swinv2", "cogview"]:
             x = norm(self.config.ln_type, dtype=self.dtype, epsilon=1e-05)(x)
-        x = nn.Dropout(rate=self.config.dropout)(x, deterministic=deterministic)
+        x = nn.Dropout(rate=self.config.dropout)(x,
+                                                 deterministic=deterministic)
         return x
 
 
@@ -608,11 +610,8 @@ class FlaxBartEncoderLayer(nn.Module):
         if self.config.use_scan:
             hidden_states = hidden_states[0]
 
-        res_gain = (
-            deepnet_gain["encoder"]["alpha"](self.config)
-            if self.config.use_deepnet_scaling
-            else 1
-        )
+        res_gain = (deepnet_gain["encoder"]["alpha"](self.config)
+                    if self.config.use_deepnet_scaling else 1)
 
         embed_dim = self.config.d_model
         residual = hidden_states
@@ -636,36 +635,31 @@ class FlaxBartEncoderLayer(nn.Module):
         )(hidden_states=hidden_states, attention_mask=attention_mask)
 
         if self.config.ln_positions in ["normformer", "swinv2", "cogview"]:
-            hidden_states = norm(self.config.ln_type, dtype=self.dtype, epsilon=1e-05)(
-                hidden_states
-            )
+            hidden_states = norm(self.config.ln_type,
+                                 dtype=self.dtype,
+                                 epsilon=1e-05)(hidden_states)
         hidden_states = nn.Dropout(rate=self.config.dropout)(
-            hidden_states, deterministic=deterministic
-        )
+            hidden_states, deterministic=deterministic)
         hidden_states = residual * res_gain + hidden_states
         if self.config.ln_positions in ["postln"]:
-            hidden_states = norm(self.config.ln_type, dtype=self.dtype, epsilon=1e-05)(
-                hidden_states
-            )
+            hidden_states = norm(self.config.ln_type,
+                                 dtype=self.dtype,
+                                 epsilon=1e-05)(hidden_states)
 
         residual = hidden_states
-        ff_block = (
-            GLU(
-                config=self.config,
-                ffn_dim=self.config.encoder_ffn_dim,
-                embed_dim=embed_dim,
-                dtype=self.dtype,
-                is_encoder=True,
-            )
-            if self.config.use_glu
-            else FFN(
-                config=self.config,
-                ffn_dim=self.config.encoder_ffn_dim,
-                embed_dim=embed_dim,
-                dtype=self.dtype,
-                is_encoder=True,
-            )
-        )
+        ff_block = (GLU(
+            config=self.config,
+            ffn_dim=self.config.encoder_ffn_dim,
+            embed_dim=embed_dim,
+            dtype=self.dtype,
+            is_encoder=True,
+        ) if self.config.use_glu else FFN(
+            config=self.config,
+            ffn_dim=self.config.encoder_ffn_dim,
+            embed_dim=embed_dim,
+            dtype=self.dtype,
+            is_encoder=True,
+        ))
         hidden_states = ff_block(hidden_states, deterministic=deterministic)
         hidden_states = residual * res_gain + hidden_states
         if self.add_norm:
@@ -677,10 +671,10 @@ class FlaxBartEncoderLayer(nn.Module):
                 use_scale=use_scale,
             )(hidden_states)
 
-        outputs = (hidden_states,)
+        outputs = (hidden_states, )
 
         if output_attentions:
-            outputs += (attn_weights,)
+            outputs += (attn_weights, )
 
         if self.config.use_scan:
             outputs = (outputs, None)
@@ -715,11 +709,8 @@ class FlaxBartDecoderLayer(nn.Module):
         if self.config.use_scan:
             hidden_states = hidden_states[0]
 
-        res_gain = (
-            deepnet_gain["decoder"]["alpha"](self.config)
-            if self.config.use_deepnet_scaling
-            else 1
-        )
+        res_gain = (deepnet_gain["decoder"]["alpha"](self.config)
+                    if self.config.use_deepnet_scaling else 1)
 
         embed_dim = self.config.d_model
         residual = hidden_states
@@ -750,17 +741,16 @@ class FlaxBartDecoderLayer(nn.Module):
         )
 
         if self.config.ln_positions in ["normformer", "swinv2", "cogview"]:
-            hidden_states = norm(self.config.ln_type, dtype=self.dtype, epsilon=1e-05)(
-                hidden_states
-            )
+            hidden_states = norm(self.config.ln_type,
+                                 dtype=self.dtype,
+                                 epsilon=1e-05)(hidden_states)
         hidden_states = nn.Dropout(rate=self.config.dropout)(
-            hidden_states, deterministic=deterministic
-        )
+            hidden_states, deterministic=deterministic)
         hidden_states = residual * res_gain + hidden_states
         if self.config.ln_positions in ["postln"]:
-            hidden_states = norm(self.config.ln_type, dtype=self.dtype, epsilon=1e-05)(
-                hidden_states
-            )
+            hidden_states = norm(self.config.ln_type,
+                                 dtype=self.dtype,
+                                 epsilon=1e-05)(hidden_states)
 
         # Cross Attention
         cross_attn_weights = None
@@ -789,37 +779,32 @@ class FlaxBartDecoderLayer(nn.Module):
                 attention_mask=encoder_attention_mask,
             )
             if self.config.ln_positions in ["normformer", "swinv2", "cogview"]:
-                hidden_states = norm(
-                    self.config.ln_type, dtype=self.dtype, epsilon=1e-05
-                )(hidden_states)
+                hidden_states = norm(self.config.ln_type,
+                                     dtype=self.dtype,
+                                     epsilon=1e-05)(hidden_states)
             hidden_states = nn.Dropout(rate=self.config.dropout)(
-                hidden_states, deterministic=deterministic
-            )
+                hidden_states, deterministic=deterministic)
             hidden_states = residual * res_gain + hidden_states
             if self.config.ln_positions in ["postln"]:
-                hidden_states = norm(
-                    self.config.ln_type, dtype=self.dtype, epsilon=1e-05
-                )(hidden_states)
+                hidden_states = norm(self.config.ln_type,
+                                     dtype=self.dtype,
+                                     epsilon=1e-05)(hidden_states)
 
         # Feed forward
         residual = hidden_states
-        ff_block = (
-            GLU(
-                config=self.config,
-                ffn_dim=self.config.decoder_ffn_dim,
-                embed_dim=embed_dim,
-                dtype=self.dtype,
-                is_encoder=False,
-            )
-            if self.config.use_glu
-            else FFN(
-                config=self.config,
-                ffn_dim=self.config.decoder_ffn_dim,
-                embed_dim=embed_dim,
-                dtype=self.dtype,
-                is_encoder=False,
-            )
-        )
+        ff_block = (GLU(
+            config=self.config,
+            ffn_dim=self.config.decoder_ffn_dim,
+            embed_dim=embed_dim,
+            dtype=self.dtype,
+            is_encoder=False,
+        ) if self.config.use_glu else FFN(
+            config=self.config,
+            ffn_dim=self.config.decoder_ffn_dim,
+            embed_dim=embed_dim,
+            dtype=self.dtype,
+            is_encoder=False,
+        ))
         hidden_states = ff_block(hidden_states, deterministic=deterministic)
         hidden_states = residual * res_gain + hidden_states
         if self.add_norm:
@@ -831,7 +816,7 @@ class FlaxBartDecoderLayer(nn.Module):
                 use_scale=use_scale,
             )(hidden_states)
 
-        outputs = (hidden_states,)
+        outputs = (hidden_states, )
 
         if output_attentions:
             outputs += (attn_weights, cross_attn_weights)
@@ -850,7 +835,6 @@ class FlaxBartEncoderLayerCollection(nn.Module):
     - use custom FlaxBartEncoderLayer
     - allow Gradient Checkpointing (nn.remat)
     """
-
     @nn.compact
     def __call__(
         self,
@@ -865,26 +849,28 @@ class FlaxBartEncoderLayerCollection(nn.Module):
         all_self_attns = () if output_attentions else None
 
         n_layers = self.config.encoder_layers
-        layer = (
-            remat(
-                FlaxBartEncoderLayer,
-                static_argnums=(2, 3),
-                prevent_cse=not self.config.use_scan,
-            )
-            if self.config.gradient_checkpointing
-            else FlaxBartEncoderLayer
-        )
+        layer = (remat(
+            FlaxBartEncoderLayer,
+            static_argnums=(2, 3),
+            prevent_cse=not self.config.use_scan,
+        ) if self.config.gradient_checkpointing else FlaxBartEncoderLayer)
 
         if self.config.use_scan:
             # all blocks are the same so we use nn.scan
             assert not output_attentions, "cannot scan with output_attentions"
             assert not output_hidden_states, "cannot scan with output_hidden_states"
-            hidden_states = (hidden_states,)
+            hidden_states = (hidden_states, )
             # we use a scale on all norms (even last layer) to allow scanning
             hidden_states, _ = nn.scan(
                 layer,
-                variable_axes={"params": 0, "cache": 0},
-                split_rngs={"params": True, "dropout": True},
+                variable_axes={
+                    "params": 0,
+                    "cache": 0
+                },
+                split_rngs={
+                    "params": True,
+                    "dropout": True
+                },
                 in_axes=(nn.broadcast, nn.broadcast, nn.broadcast),
                 length=n_layers,
             )(
@@ -902,14 +888,12 @@ class FlaxBartEncoderLayerCollection(nn.Module):
         else:
             for i in range(n_layers):
                 if output_hidden_states:
-                    all_hidden_states += (hidden_states,)
+                    all_hidden_states += (hidden_states, )
                 # final layernorm on the output of the last layer
                 # or every 6 layers for Swin v2
                 add_norm = self.config.ln_positions == "postln" or (
-                    self.config.ln_positions == "swinv2"
-                    and ((i + 1) % 6 == 0)
-                    and (i != n_layers - 1)
-                )
+                    self.config.ln_positions == "swinv2" and
+                    ((i + 1) % 6 == 0) and (i != n_layers - 1))
                 # we don't need to scale the norm for the last layer
                 use_scale = i != n_layers - 1
                 layer_outputs = layer(
@@ -926,11 +910,11 @@ class FlaxBartEncoderLayerCollection(nn.Module):
                 )
                 hidden_states = layer_outputs[0]
                 if output_attentions:
-                    all_self_attns += (layer_outputs[1],)
+                    all_self_attns += (layer_outputs[1], )
 
             # add hidden states from the last layer
             if output_hidden_states:
-                all_hidden_states += (hidden_states,)
+                all_hidden_states += (hidden_states, )
 
         outputs = [
             hidden_states,
@@ -956,7 +940,6 @@ class FlaxBartDecoderLayerCollection(nn.Module):
     - use custom FlaxBartDecoderLayer
     - allow Gradient Checkpointing (nn.remat)
     """
-
     @nn.compact
     def __call__(
         self,
@@ -973,31 +956,32 @@ class FlaxBartDecoderLayerCollection(nn.Module):
         # decoder layers
         all_hidden_states = () if output_hidden_states else None
         all_self_attns = () if output_attentions else None
-        all_cross_attentions = (
-            () if (output_attentions and encoder_hidden_states is not None) else None
-        )
+        all_cross_attentions = (() if (
+            output_attentions and encoder_hidden_states is not None) else None)
 
         n_layers = self.config.decoder_layers
-        layer = (
-            remat(
-                FlaxBartDecoderLayer,
-                static_argnums=(4, 5, 6),
-                prevent_cse=not self.config.use_scan,
-            )
-            if self.config.gradient_checkpointing
-            else FlaxBartDecoderLayer
-        )
+        layer = (remat(
+            FlaxBartDecoderLayer,
+            static_argnums=(4, 5, 6),
+            prevent_cse=not self.config.use_scan,
+        ) if self.config.gradient_checkpointing else FlaxBartDecoderLayer)
 
         if self.config.use_scan:
             # all blocks are the same so we use nn.scan
             assert not output_attentions, "cannot scan with output_attentions"
             assert not output_hidden_states, "cannot scan with output_hidden_states"
-            hidden_states = (hidden_states,)
+            hidden_states = (hidden_states, )
             # we use a scale on all norms (even last layer) to allow scanning
             hidden_states, _ = nn.scan(
                 layer,
-                variable_axes={"params": 0, "cache": 0},
-                split_rngs={"params": True, "dropout": True},
+                variable_axes={
+                    "params": 0,
+                    "cache": 0
+                },
+                split_rngs={
+                    "params": True,
+                    "dropout": True
+                },
                 in_axes=(
                     nn.broadcast,
                     nn.broadcast,
@@ -1026,14 +1010,12 @@ class FlaxBartDecoderLayerCollection(nn.Module):
         else:
             for i in range(n_layers):
                 if output_hidden_states:
-                    all_hidden_states += (hidden_states,)
+                    all_hidden_states += (hidden_states, )
                 # final layernorm on the output of the last layer
                 # or every 6 layers for Swin v2
                 add_norm = self.config.ln_positions == "postln" or (
-                    self.config.ln_positions == "swinv2"
-                    and ((i + 1) % 6 == 0)
-                    and (i != n_layers - 1)
-                )
+                    self.config.ln_positions == "swinv2" and
+                    ((i + 1) % 6 == 0) and (i != n_layers - 1))
                 # we don't need to scale the norm for the last layer
                 use_scale = i != n_layers - 1
                 layer_outputs = layer(
@@ -1054,14 +1036,14 @@ class FlaxBartDecoderLayerCollection(nn.Module):
 
                 hidden_states = layer_outputs[0]
                 if output_attentions:
-                    all_self_attns += (layer_outputs[1],)
+                    all_self_attns += (layer_outputs[1], )
 
                     if encoder_hidden_states is not None:
-                        all_cross_attentions += (layer_outputs[2],)
+                        all_cross_attentions += (layer_outputs[2], )
 
             # add hidden states from the last decoder layer
             if output_hidden_states:
-                all_hidden_states += (hidden_states,)
+                all_hidden_states += (hidden_states, )
 
         outputs = [
             hidden_states,
@@ -1092,27 +1074,29 @@ class FlaxBartEncoder(nn.Module):
     - use custom FlaxBartEncoderLayerCollection
     - embed_tokens cannot be None (issue at compile time)
     """
-
     def setup(self):
         self.dropout_layer = nn.Dropout(rate=self.config.dropout)
 
         embed_dim = self.config.d_model
         self.padding_idx = self.config.pad_token_id
-        self.embed_scale = math.sqrt(embed_dim) if self.config.scale_embedding else 1.0
+        self.embed_scale = math.sqrt(
+            embed_dim) if self.config.scale_embedding else 1.0
 
         # Bart is set up so that if padding_idx is specified then offset the embedding ids by 2
         # and adjust num_embeddings appropriately. Other models don't have this hack
         self.offset = 0
         if self.config.use_absolute_position_embeddings:
             self.embed_positions = nn.Embed(
-                self.config.max_text_length + self.offset,  # image length for BOS
+                self.config.max_text_length +
+                self.offset,  # image length for BOS
                 embed_dim,
-                embedding_init=jax.nn.initializers.normal(self.config.init_std),
+                embedding_init=jax.nn.initializers.normal(
+                    self.config.init_std),
             )
         self.layers = FlaxBartEncoderLayerCollection(self.config, self.dtype)
-        self.layernorm_embedding = norm(
-            self.config.ln_type, dtype=self.dtype, epsilon=1e-05
-        )
+        self.layernorm_embedding = norm(self.config.ln_type,
+                                        dtype=self.dtype,
+                                        epsilon=1e-05)
 
         # postln is already applied in every layer
         if self.config.use_final_ln_encoder and self.config.ln_positions != "postln":
@@ -1145,7 +1129,8 @@ class FlaxBartEncoder(nn.Module):
             hidden_states = hidden_states + embed_pos
 
         hidden_states = self.layernorm_embedding(hidden_states)
-        hidden_states = self.dropout_layer(hidden_states, deterministic=deterministic)
+        hidden_states = self.dropout_layer(hidden_states,
+                                           deterministic=deterministic)
 
         outputs = self.layers(
             hidden_states,
@@ -1162,7 +1147,7 @@ class FlaxBartEncoder(nn.Module):
             final_output = self.final_ln(outputs[0])
 
         if not return_dict:
-            return (final_output,) + outputs[1:]
+            return (final_output, ) + outputs[1:]
 
         return FlaxBaseModelOutput(
             last_hidden_state=final_output,
@@ -1182,15 +1167,13 @@ class FlaxBartDecoder(nn.Module):
     - use custom FlaxBartDecoderLayerCollection
     - embed_tokens cannot be None (issue at compile time)
     """
-
     def setup(self):
         self.dropout_layer = nn.Dropout(rate=self.config.dropout)
 
         embed_dim = self.config.d_model
         self.padding_idx = self.config.pad_token_id
-        self.embed_scale = (
-            math.sqrt(self.config.d_model) if self.config.scale_embedding else 1.0
-        )
+        self.embed_scale = (math.sqrt(self.config.d_model)
+                            if self.config.scale_embedding else 1.0)
 
         # Bart is set up so that if padding_idx is specified then offset the embedding ids by 2
         # and adjust num_embeddings appropriately. Other models don't have this hack
@@ -1199,13 +1182,14 @@ class FlaxBartDecoder(nn.Module):
             self.embed_positions = nn.Embed(
                 self.config.image_length + self.offset,  # image length for BOS
                 embed_dim,
-                embedding_init=jax.nn.initializers.normal(self.config.init_std),
+                embedding_init=jax.nn.initializers.normal(
+                    self.config.init_std),
             )
 
         self.layers = FlaxBartDecoderLayerCollection(self.config, self.dtype)
-        self.layernorm_embedding = norm(
-            self.config.ln_type, dtype=self.dtype, epsilon=1e-05
-        )
+        self.layernorm_embedding = norm(self.config.ln_type,
+                                        dtype=self.dtype,
+                                        epsilon=1e-05)
 
         # postln is already applied in every layer
         if self.config.use_final_ln_decoder and self.config.ln_positions != "postln":
@@ -1239,7 +1223,8 @@ class FlaxBartDecoder(nn.Module):
             hidden_states = hidden_states + embed_pos
 
         hidden_states = self.layernorm_embedding(hidden_states)
-        hidden_states = self.dropout_layer(hidden_states, deterministic=deterministic)
+        hidden_states = self.dropout_layer(hidden_states,
+                                           deterministic=deterministic)
 
         outputs = self.layers(
             hidden_states,
@@ -1259,7 +1244,7 @@ class FlaxBartDecoder(nn.Module):
             final_output = self.final_ln(outputs[0])
 
         if not return_dict:
-            return (final_output,) + outputs[1:]
+            return (final_output, ) + outputs[1:]
 
         return FlaxBaseModelOutputWithPastAndCrossAttentions(
             last_hidden_state=final_output,
@@ -1275,7 +1260,6 @@ class FlaxBartModule(FlaxBartModule):
     - use custom FlaxBartEncoder & FlaxBartDecoder
     - use separate embeddings for Encoder & Decoder
     """
-
     def setup(self):
         encoder_embed_tokens = nn.Embed(
             self.config.encoder_vocab_size,
@@ -1288,27 +1272,27 @@ class FlaxBartModule(FlaxBartModule):
             embedding_init=jax.nn.initializers.normal(self.config.init_std),
         )
 
-        self.encoder = FlaxBartEncoder(
-            self.config, dtype=self.dtype, embed_tokens=encoder_embed_tokens
-        )
-        self.decoder = FlaxBartDecoder(
-            self.config, dtype=self.dtype, embed_tokens=decoder_embed_tokens
-        )
+        self.encoder = FlaxBartEncoder(self.config,
+                                       dtype=self.dtype,
+                                       embed_tokens=encoder_embed_tokens)
+        self.decoder = FlaxBartDecoder(self.config,
+                                       dtype=self.dtype,
+                                       embed_tokens=decoder_embed_tokens)
 
 
-class FlaxBartForConditionalGenerationModule(FlaxBartForConditionalGenerationModule):
+class FlaxBartForConditionalGenerationModule(
+        FlaxBartForConditionalGenerationModule):
     """
     Edits:
     - no bias
     - lm_head set to image_vocab_size + 1 (for BOS)
     - uses custom FlaxBartModule
     """
-
     def setup(self):
         self.model = FlaxBartModule(config=self.config, dtype=self.dtype)
         self.lm_head = nn.Dense(
-            self.config.image_vocab_size
-            + 1,  # image vocab size + 1 for BOS to have same size as decoder inputs (for sharding)
+            self.config.image_vocab_size +
+            1,  # image vocab size + 1 for BOS to have same size as decoder inputs (for sharding)
             use_bias=False,
             dtype=self.dtype,
             kernel_init=jax.nn.initializers.normal(self.config.init_std),
@@ -1343,15 +1327,17 @@ class FlaxBartForConditionalGenerationModule(FlaxBartForConditionalGenerationMod
         hidden_states = outputs[0]
 
         if self.config.tie_word_embeddings:
-            shared_embedding = self.model.variables["params"]["shared"]["embedding"]
+            shared_embedding = self.model.variables["params"]["shared"][
+                "embedding"]
             lm_logits = self.lm_head.apply(
-                {"params": {"kernel": shared_embedding.T}}, hidden_states
-            )
+                {"params": {
+                    "kernel": shared_embedding.T
+                }}, hidden_states)
         else:
             lm_logits = self.lm_head(hidden_states)
 
         if not return_dict:
-            output = (lm_logits,) + outputs[1:]
+            output = (lm_logits, ) + outputs[1:]
             return output
 
         return FlaxSeq2SeqLMOutput(
@@ -1395,9 +1381,9 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
     def num_params(self, params=None):
         if params is None:
             params = self.params
-        num_params = jax.tree_util.tree_map(
-            lambda param: param.size, flatten_dict(unfreeze(params))
-        ).values()
+        num_params = jax.tree_util.tree_map(lambda param: param.size,
+                                            flatten_dict(
+                                                unfreeze(params))).values()
         return sum(list(num_params))
 
     def unscan(self, params):
@@ -1412,7 +1398,7 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                     new_k = (
                         *k[:name_idx],
                         f"{k[name_idx][:-1]}_{i}",
-                        *k[name_idx + 1 :],
+                        *k[name_idx + 1:],
                     )
                     params[new_k] = v[i]
                 del params[k]
@@ -1434,19 +1420,13 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
         params: dict = None,
         dropout_rng: PRNGKey = None,
     ):
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
-        output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
-        )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.return_dict
-        )
+        output_attentions = (output_attentions if output_attentions is not None
+                             else self.config.output_attentions)
+        output_hidden_states = (output_hidden_states
+                                if output_hidden_states is not None else
+                                self.config.output_hidden_states)
+        return_dict = (return_dict
+                       if return_dict is not None else self.config.return_dict)
 
         encoder_hidden_states = encoder_outputs[0]
         if encoder_attention_mask is None:
@@ -1464,8 +1444,8 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 )
 
             decoder_position_ids = jnp.broadcast_to(
-                jnp.arange(sequence_length)[None, :], (batch_size, sequence_length)
-            )
+                jnp.arange(sequence_length)[None, :],
+                (batch_size, sequence_length))
 
         # Handle any PRNG if needed
         rngs = {}
@@ -1501,11 +1481,11 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
 
             if self.config.tie_word_embeddings:
                 shared_embedding = module.model.variables["params"]["shared"][
-                    "embedding"
-                ]
+                    "embedding"]
                 lm_logits = module.lm_head.apply(
-                    {"params": {"kernel": shared_embedding.T}}, hidden_states
-                )
+                    {"params": {
+                        "kernel": shared_embedding.T
+                    }}, hidden_states)
             else:
                 lm_logits = module.lm_head(hidden_states)
 
@@ -1514,10 +1494,12 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
         outputs = self.module.apply(
             inputs,
             decoder_input_ids=jnp.array(decoder_input_ids, dtype="i4"),
-            decoder_attention_mask=jnp.array(decoder_attention_mask, dtype="i4"),
+            decoder_attention_mask=jnp.array(decoder_attention_mask,
+                                             dtype="i4"),
             decoder_position_ids=jnp.array(decoder_position_ids, dtype="i4"),
             encoder_hidden_states=encoder_hidden_states,
-            encoder_attention_mask=jnp.array(encoder_attention_mask, dtype="i4"),
+            encoder_attention_mask=jnp.array(encoder_attention_mask,
+                                             dtype="i4"),
             output_attentions=output_attentions,
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
@@ -1540,14 +1522,14 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 cross_attentions=decoder_outputs.cross_attentions,
             )
         else:
-            outputs = (lm_logits,) + decoder_outputs[1:]
+            outputs = (lm_logits, ) + decoder_outputs[1:]
 
         # add updated cache to model output
         if past_key_values is not None and return_dict:
             outputs["past_key_values"] = unfreeze(past["cache"])
             return outputs
         elif past_key_values is not None and not return_dict:
-            outputs = outputs[:1] + (unfreeze(past["cache"]),) + outputs[1:]
+            outputs = outputs[:1] + (unfreeze(past["cache"]), ) + outputs[1:]
 
         return outputs
 
@@ -1563,20 +1545,21 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
         # initializing the cache
         batch_size, seq_length = decoder_input_ids.shape
 
-        past_key_values = self.init_cache(batch_size, max_length - 1, encoder_outputs)
+        past_key_values = self.init_cache(batch_size, max_length - 1,
+                                          encoder_outputs)
         # Note that usually one would have to put 0's in the attention_mask for x > input_ids.shape[-1] and x < cache_length.
         # But since the decoder uses a causal mask, those positions are masked anyways.
         # Thus we can create a single static attention_mask here, which is more efficient for compilation
-        extended_attention_mask = jnp.ones((batch_size, max_length - 1), dtype="i4")
+        extended_attention_mask = jnp.ones((batch_size, max_length - 1),
+                                           dtype="i4")
         if decoder_attention_mask is not None:
             position_ids = decoder_attention_mask.cumsum(axis=-1) - 1
             extended_attention_mask = lax.dynamic_update_slice(
-                extended_attention_mask, decoder_attention_mask, (0, 0)
-            )
+                extended_attention_mask, decoder_attention_mask, (0, 0))
         else:
             position_ids = jnp.broadcast_to(
-                jnp.arange(seq_length, dtype="i4")[None, :], (batch_size, seq_length)
-            )
+                jnp.arange(seq_length, dtype="i4")[None, :],
+                (batch_size, seq_length))
 
         return {
             "past_key_values": past_key_values,
@@ -1618,20 +1601,15 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
 
         # set init values
         max_length = max_length if max_length is not None else self.config.max_length
-        bos_token_id = (
-            bos_token_id if bos_token_id is not None else self.config.bos_token_id
-        )
-        pad_token_id = (
-            pad_token_id if pad_token_id is not None else self.config.pad_token_id
-        )
-        eos_token_id = (
-            eos_token_id if eos_token_id is not None else self.config.eos_token_id
-        )
-        decoder_start_token_id = (
-            decoder_start_token_id
-            if decoder_start_token_id
-            else self.config.decoder_start_token_id
-        )
+        bos_token_id = (bos_token_id if bos_token_id is not None else
+                        self.config.bos_token_id)
+        pad_token_id = (pad_token_id if pad_token_id is not None else
+                        self.config.pad_token_id)
+        eos_token_id = (eos_token_id if eos_token_id is not None else
+                        self.config.eos_token_id)
+        decoder_start_token_id = (decoder_start_token_id
+                                  if decoder_start_token_id else
+                                  self.config.decoder_start_token_id)
         prng_key = prng_key if prng_key is not None else jax.random.PRNGKey(0)
 
         if decoder_start_token_id is None and self.config.is_encoder_decoder:
@@ -1649,7 +1627,10 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 model_kwargs = self._prepare_encoder_decoder_kwargs_for_generation(
                     input_ids,
                     params,
-                    {"attention_mask": attention_mask, **model_kwargs_input},
+                    {
+                        "attention_mask": attention_mask,
+                        **model_kwargs_input
+                    },
                 )
                 if condition_scale != 1.0:
                     assert (
@@ -1669,14 +1650,12 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                                 "attention_mask": attention_mask_uncond,
                                 **model_kwargs_input,
                             },
-                        )
-                    )
+                        ))
                 else:
                     model_kwargs_uncond = None
             # prepare decoder_input_ids for generation
-            input_ids = (
-                jnp.ones((input_ids.shape[0], 1), dtype="i4") * decoder_start_token_id
-            )
+            input_ids = (jnp.ones(
+                (input_ids.shape[0], 1), dtype="i4") * decoder_start_token_id)
 
         if not do_sample and num_beams == 1:
             logits_processor = self._get_logits_processor(
@@ -1698,9 +1677,9 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 model_kwargs=model_kwargs,
             )
         elif do_sample and num_beams == 1:
-            logits_warper = self._get_logits_warper(
-                top_k=top_k, top_p=top_p, temperature=temperature
-            )
+            logits_warper = self._get_logits_warper(top_k=top_k,
+                                                    top_p=top_p,
+                                                    temperature=temperature)
             logits_processor = self._get_logits_processor(
                 no_repeat_ngram_size,
                 min_length,
@@ -1725,20 +1704,19 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
             )
         elif not do_sample and num_beams > 1:
             # broadcast input_ids & encoder_outputs
-            input_ids = self._expand_to_num_beams(input_ids, num_beams=num_beams)
+            input_ids = self._expand_to_num_beams(input_ids,
+                                                  num_beams=num_beams)
 
             if "encoder_outputs" in model_kwargs:
                 model_kwargs["encoder_outputs"][
-                    "last_hidden_state"
-                ] = self._expand_to_num_beams(
-                    model_kwargs["encoder_outputs"]["last_hidden_state"],
-                    num_beams=num_beams,
-                )
+                    "last_hidden_state"] = self._expand_to_num_beams(
+                        model_kwargs["encoder_outputs"]["last_hidden_state"],
+                        num_beams=num_beams,
+                    )
 
             if "attention_mask" in model_kwargs:
                 model_kwargs["attention_mask"] = self._expand_to_num_beams(
-                    model_kwargs["attention_mask"], num_beams=num_beams
-                )
+                    model_kwargs["attention_mask"], num_beams=num_beams)
 
             logits_processor = self._get_logits_processor(
                 no_repeat_ngram_size,
@@ -1762,7 +1740,8 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
                 model_kwargs=model_kwargs,
             )
         else:
-            raise NotImplementedError("`Beam sampling is currently not implemented.")
+            raise NotImplementedError(
+                "`Beam sampling is currently not implemented.")
 
     def _sample(
         self,
@@ -1781,12 +1760,10 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
     ):
         # init values
         max_length = max_length if max_length is not None else self.config.max_length
-        pad_token_id = (
-            pad_token_id if pad_token_id is not None else self.config.pad_token_id
-        )
-        eos_token_id = (
-            eos_token_id if eos_token_id is not None else self.config.eos_token_id
-        )
+        pad_token_id = (pad_token_id if pad_token_id is not None else
+                        self.config.pad_token_id)
+        eos_token_id = (eos_token_id if eos_token_id is not None else
+                        self.config.eos_token_id)
         prng_key = prng_key if prng_key is not None else jax.random.PRNGKey(0)
 
         batch_size, cur_len = input_ids.shape
@@ -1796,11 +1773,13 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
         cur_len = jnp.array(cur_len)
 
         # per batch-item holding current token in loop.
-        sequences = jnp.full((batch_size, max_length), pad_token_id, dtype=jnp.int32)
+        sequences = jnp.full((batch_size, max_length),
+                             pad_token_id,
+                             dtype=jnp.int32)
         sequences = lax.dynamic_update_slice(sequences, input_ids, (0, 0))
 
         # per batch-item state bit indicating if sentence has finished.
-        is_sent_finished = jnp.zeros((batch_size,), dtype=jnp.bool_)
+        is_sent_finished = jnp.zeros((batch_size, ), dtype=jnp.bool_)
 
         # For Seq2Seq generation, we only need to use the decoder instead of the whole model in generation loop
         # and pass it the `encoder_outputs`, which are part of the `model_kwargs`.
@@ -1808,12 +1787,10 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
 
         # initialize model specific kwargs
         model_kwargs = self.prepare_inputs_for_generation(
-            input_ids, max_length, **model_kwargs
-        )
+            input_ids, max_length, **model_kwargs)
         if condition_scale != 1.0:
             model_kwargs_uncond = self.prepare_inputs_for_generation(
-                input_ids, max_length, **model_kwargs_uncond
-            )
+                input_ids, max_length, **model_kwargs_uncond)
 
         # initialize state
         state = SampleState(
@@ -1830,28 +1807,28 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
             """state termination condition fn."""
             has_reached_max_length = state.cur_len == max_length
             all_sequence_finished = jnp.all(state.is_sent_finished)
-            finish_generation = jnp.logical_or(
-                has_reached_max_length, all_sequence_finished
-            )
+            finish_generation = jnp.logical_or(has_reached_max_length,
+                                               all_sequence_finished)
             return ~finish_generation
 
         def sample_search_body_fn(state):
             """state update fn."""
             prng_key, prng_key_next = jax.random.split(state.prng_key)
-            model_outputs = model(
-                state.running_token, params=params, **state.model_kwargs
-            )
+            model_outputs = model(state.running_token,
+                                  params=params,
+                                  **state.model_kwargs)
 
             logits = model_outputs.logits[:, -1]
 
             # perform super conditioning
             # Source: @RiversHaveWings - https://twitter.com/RiversHaveWings/status/1478093658716966912?s=20&t=xdm-wZ61Wf7OLnE_NJHZ1w
             if condition_scale != 1.0:
-                model_outputs_uncond = model(
-                    state.running_token, params=params, **state.model_kwargs_uncond
-                )
+                model_outputs_uncond = model(state.running_token,
+                                             params=params,
+                                             **state.model_kwargs_uncond)
                 logits_uncond = model_outputs_uncond.logits[:, -1]
-                logits = logits_uncond + condition_scale * (logits - logits_uncond)
+                logits = logits_uncond + condition_scale * (logits -
+                                                            logits_uncond)
             else:
                 model_outputs_uncond = None
 
@@ -1862,28 +1839,20 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
 
             next_token = jax.random.categorical(prng_key, logits, axis=-1)
 
-            next_is_sent_finished = state.is_sent_finished | (
-                next_token == eos_token_id
-            )
-            next_token = (
-                next_token * ~next_is_sent_finished
-                + pad_token_id * next_is_sent_finished
-            )
+            next_is_sent_finished = state.is_sent_finished | (next_token
+                                                              == eos_token_id)
+            next_token = (next_token * ~next_is_sent_finished +
+                          pad_token_id * next_is_sent_finished)
             next_token = next_token[:, None]
 
-            next_sequences = lax.dynamic_update_slice(
-                state.sequences, next_token, (0, state.cur_len)
-            )
+            next_sequences = lax.dynamic_update_slice(state.sequences,
+                                                      next_token,
+                                                      (0, state.cur_len))
             next_model_kwargs = self.update_inputs_for_generation(
-                model_outputs, state.model_kwargs
-            )
-            next_model_kwargs_uncond = (
-                self.update_inputs_for_generation(
-                    model_outputs_uncond, state.model_kwargs_uncond
-                )
-                if condition_scale != 1.0
-                else None
-            )
+                model_outputs, state.model_kwargs)
+            next_model_kwargs_uncond = (self.update_inputs_for_generation(
+                model_outputs_uncond, state.model_kwargs_uncond)
+                                        if condition_scale != 1.0 else None)
 
             return SampleState(
                 cur_len=state.cur_len + 1,
@@ -1900,10 +1869,10 @@ class DalleBart(PretrainedFromWandbMixin, FlaxBartForConditionalGeneration):
             state = sample_search_body_fn(state)
 
         if not trace:
-            state = self._run_loop_in_debug(
-                sample_search_cond_fn, sample_search_body_fn, state
-            )
+            state = self._run_loop_in_debug(sample_search_cond_fn,
+                                            sample_search_body_fn, state)
         else:
-            state = lax.while_loop(sample_search_cond_fn, sample_search_body_fn, state)
+            state = lax.while_loop(sample_search_cond_fn,
+                                   sample_search_body_fn, state)
 
         return FlaxSampleOutput(sequences=state.sequences)
