@@ -23,6 +23,7 @@ class GameCoordinateTokenizer():
         truncation: bool = True,
         return_tensors: str = "np",
     ):
+        print("!!!!!!!!!!!!!!!!!! Max len is", max_length)
         assert return_tensors == "np"
         max_coords = COORD_EMBED_SIZE if truncation else max_length
         tokenized = {
@@ -40,4 +41,5 @@ class GameCoordinateTokenizer():
             tokenized['input_ids'][i, 5] = coordinates["rotation"]["z"]
             tokenized['input_ids'][i, 6] = coordinates["rotation"]["w"]
             tokenized['attention_mask'][i] = np.array(range(COORD_EMBED_SIZE))
+        print("!!!!!!!!!!!!!!!!! Shape is", tokenized['attention_max'].shape)
         return tokenized
