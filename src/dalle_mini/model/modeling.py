@@ -385,11 +385,12 @@ class FlaxBartAttention(FlaxBartAttention):
             causal_mask = jnp.broadcast_to(causal_mask, (batch_size, ) +
                                            causal_mask.shape[1:])
             print("!!!! CAUSAL MASK SHAPE", causal_mask.shape)
-            print("!!!! QUERY LENGTH", len(query_length))
-            print("!!!! KEY LENGTH", len(key_length))
+            print("!!!! QUERY LENGTH", query_length)
+            print("!!!! KEY LENGTH", key_length)
 
         # combine masks if needed
         if attention_mask is not None and self.causal:
+            print("!!!! CAUSAL MASK SHAPE before", causal_mask.shape)
             attention_mask = jnp.broadcast_to(
                 jnp.expand_dims(attention_mask, axis=(-3, -2)),
                 causal_mask.shape)
