@@ -20,7 +20,7 @@
     "eos_token_id": 16385,
     "force_ln_scale": false,
     "gradient_checkpointing": true,
-    "image_length": 1024,
+    "image_length": 256,
     "image_vocab_size": 16384,
     "init_std": 0.02,
     "is_encoder_decoder": true,
