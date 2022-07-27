@@ -25,18 +25,19 @@ class GameCoordinateTokenizer():
     ):
         assert return_tensors == "np"
         max_coords = COORD_EMBED_SIZE if truncation else max_length
-        np_coords = np.zeros((len(inputs), max_coords))
+        tokenized = {
+            'input_ids': np.zeros((len(inputs), max_coords)),
+            'attention_mask': np.zeros((len(inputs), max_coords)),
+            'length': np.array([COORD_EMBED_SIZE] * len(inputs)),
+        }
         for i, input in enumerate(inputs):
             coordinates = json.loads(input)
-            np_coords[i, 0] = coordinates["position"]["x"]
-            np_coords[i, 1] = coordinates["position"]["y"]
-            np_coords[i, 2] = coordinates["position"]["z"]
-            np_coords[i, 3] = coordinates["rotation"]["x"]
-            np_coords[i, 4] = coordinates["rotation"]["y"]
-            np_coords[i, 5] = coordinates["rotation"]["z"]
-            np_coords[i, 6] = coordinates["rotation"]["w"]
-        return {
-            'input_ids': np_coords,
-            'attention_mask': np.array(range(COORD_EMBED_SIZE)),
-            'length': COORD_EMBED_SIZE
-        }
+            tokenized['input_ids'][i, 0] = coordinates["position"]["x"]
+            tokenized['input_ids'][i, 1] = coordinates["position"]["y"]
+            tokenized['input_ids'][i, 2] = coordinates["position"]["z"]
+            tokenized['input_ids'][i, 3] = coordinates["rotation"]["x"]
+            tokenized['input_ids'][i, 4] = coordinates["rotation"]["y"]
+            tokenized['input_ids'][i, 5] = coordinates["rotation"]["z"]
+            tokenized['input_ids'][i, 6] = coordinates["rotation"]["w"]
+            tokenized['attention_mask'][i] = np.array(range(COORD_EMBED_SIZE))
+        return tokenized
