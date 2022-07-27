@@ -40,6 +40,7 @@ class GameCoordinateTokenizer():
             tokenized['input_ids'][i, 4] = coordinates["rotation"]["y"]
             tokenized['input_ids'][i, 5] = coordinates["rotation"]["z"]
             tokenized['input_ids'][i, 6] = coordinates["rotation"]["w"]
-            tokenized['attention_mask'][i] = np.array(range(COORD_EMBED_SIZE))
+            tokenized['attention_mask'][i, :7] = np.array(
+                range(COORD_EMBED_SIZE))
         print("!!!!!!!!!!!!!!!!! Shape is", tokenized['attention_mask'].shape)
         return tokenized
