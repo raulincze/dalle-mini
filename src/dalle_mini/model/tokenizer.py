@@ -32,4 +32,4 @@ class GameCoordinateTokenizer():
             np_coords[i, 4] = coordinates["rotation"]["y"]
             np_coords[i, 5] = coordinates["rotation"]["z"]
             np_coords[i, 6] = coordinates["rotation"]["w"]
-        return np_coords
+        return {'input_ids': np_coords}
