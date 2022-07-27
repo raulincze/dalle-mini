@@ -27,7 +27,7 @@
     "ln_positions": "normformer",
     "ln_type": "layernorm",
     "max_length": 257,
-    "max_text_length": 8,
+    "max_text_length": 64,
     "min_length": 257,
     "model_type": "dallebart",
     "normalize_text": false,
