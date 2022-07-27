@@ -24,7 +24,7 @@ class GameCoordinateTokenizer():
         return_tensors: str = "np",
     ):
         assert return_tensors == "np"
-        max_coords = COORD_EMBED_SIZE if truncation else max_length
+        max_coords = COORD_EMBED_SIZE
         tokenized = {
             'input_ids': np.zeros((len(inputs), max_coords)),
             'attention_mask': np.zeros((len(inputs), max_coords)),
