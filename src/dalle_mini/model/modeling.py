@@ -367,6 +367,7 @@ class FlaxBartAttention(FlaxBartAttention):
         value_states = self._split_heads(value_states)
 
         # handle cache prepare causal attention mask
+        print("!!!! CAUSAL MASK SHAPE at start", causal_mask.shape)
         if self.causal:
             query_length, key_length = query_states.shape[1], key_states.shape[
                 1]
